@@ -1,0 +1,45 @@
+{
+  "name": "api",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "start": "nodemon ./bin/www --exec babel-node",
+    "populateDict": "nodemon ./db/populateDict.js --exec babel-node",
+    "createTrie": "nodemon ./db/createTrie.js --exec babel-node",
+    "test": "nodemon ./test --exec babel-node",
+    "migrate": "nodemon ./db/migration/create_dictionary_text_index.js --exec babel-node"
+  },
+  "babel": {
+    "presets": [
+      "@babel/preset-env"
+    ],
+    "plugins": [
+      "@babel/plugin-proposal-class-properties"
+    ]
+  },
+  "dependencies": {
+    "@babel/plugin-proposal-class-properties": "^7.4.4",
+    "body-parser": "~1.18.2",
+    "cookie-parser": "~1.4.3",
+    "debug": "~2.6.9",
+    "express": "~4.15.5",
+    "jade": "~1.11.0",
+    "mongodb": "^3.2.3",
+    "morgan": "~1.9.0",
+    "serve-favicon": "~2.4.5",
+    "winston": "^3.2.1"
+  },
+  "devDependencies": {
+    "@babel/cli": "^7.4.4",
+    "@babel/core": "^7.4.4",
+    "@babel/node": "^7.2.2",
+    "@babel/preset-env": "^7.4.4",
+    "@babel/preset-stage-2": "^7.0.0",
+    "cheerio": "^1.0.0-rc.3",
+    "jsonify": "0.0.0",
+    "nodemon": "^1.19.0",
+    "request": "^2.88.0",
+    "request-promise": "^4.2.4",
+    "xml2json": "^0.11.2"
+  }
+}
