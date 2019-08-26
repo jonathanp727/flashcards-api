@@ -5,18 +5,15 @@ const app = require('../app');
 const debug = require('debug')('api:server');
 const logger = require('../lib/logger');
 const config = require('../config/config.json');
-const MongoClient = require('mongodb').MongoClient;
+const MongoClient = require('../lib/mongoClient');
 
 // Set config to global namespace
 global.gConfig = config;
 
 const server = http.createServer(app);
 
-MongoClient.connect(global.gConfig.database.url, { useNewUrlParser: true }, (err, client) => {
-  if (err) {
-    logger.warn(`Failed to connect to the database. ${err.stack}`);
-  }
-  app.locals.db = client.db(global.gConfig.database.name);
+MongoClient.connectToServer(err => { 
+  if(err) throw err;
 
   server.listen(global.gConfig.port, () => {
     logger.info('Server listening');
