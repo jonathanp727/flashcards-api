@@ -3,9 +3,8 @@ import { ObjectId } from 'mongodb';
 import MongoClient from '../lib/MongoClient';
 
 /**
- * Checks the users 'upcoming' flashcards.  If there are less than the daily limit, returns
- * an array (of word IDs) of the appropriate number of cards that are next based on the users
- * JLPT rank. Otherwise returns an empty array.  
+ * Returns an array (of word IDs) of the `numCardToAdd` number of cards that 
+ * are next based on the users JLPT rank.
  *
  * @param user [Object]
  *   upcoming: Array,

@@ -11,6 +11,17 @@ export const DEFAULT_WORD_SCHEMA = {
   upcoming: false,  // States whether the word is in the user's 'upcoming' arr for words that will soon be added to deck
 };
 
+/**
+ * Adds an array of words to upcoming, updating the user's JLPT and their date of last session.
+ * This function is to be used for automatic new words based on JLPT rank only, as it modifies
+ * the JLPT and changes the date which is used to track whether cards should be automatically
+ * updated or not.
+ *
+ * @param userId    Mongo ObjectId
+ * @param newWords  Array of mongoObjectIds,
+ * @param newJlpt   { level: Number, index: Number }
+ * @return          Updated user object
+ */
 exports.addToUpcoming = (userId, newWords, newJlpt) => (
   new Promise((resolve, reject) => {
     const setWordsQuery = {};
@@ -21,10 +32,7 @@ exports.addToUpcoming = (userId, newWords, newJlpt) => (
       setWordsQuery[`words.${wordId}`] = schema;
     });
     setWordsQuery.cardData.lastSession.date = new Date().getTime();
-
-    if (newJlpt) {
-      setWordsQuery.jlpt = newJlpt;
-    }
+    setWordsQuery.jlpt = newJlpt;
 
     MongoClient.getDb().collection(USER_COLL).findOneAndUpdate({ _id: ObjectId(userId) }, {
       $push: { upcoming: { $each: newWords }},

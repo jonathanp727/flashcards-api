@@ -2,8 +2,8 @@ import { ObjectId } from 'mongodb';
 
 import MongoClient from '../lib/MongoClient';
 import { isSameDay } from '../lib/dateLogic';
-import { getNextWords } from './card';
-import { addToUpcoming } from './word';
+import CardModel from './card';
+import WordModel from './word';
 
 const USER_COLL = 'users';
 
@@ -79,7 +79,14 @@ exports.delete = (id) => (
   })
 );
 
-// Gets user and also checks if new cards should be added, doing so if necessary
+/**
+ * Checks if user has space in their upcoming for automatic JLPT based new flashcards.  If the
+ * check has not been performed today and there is space, adds new cards to upcoming and returns
+ * updated user.
+ *
+ * @param id Mongo UserId
+ * @return         Updated user object
+ */
 exports.getWithUpcoming = (id) => (
   new Promise(async (resolve, reject) => {
     try {
@@ -89,8 +96,8 @@ exports.getWithUpcoming = (id) => (
       const isAlreadyDoneToday = isSameDay(new Date(user.cardData.lastSession.date), new Date());
 
       if (!isAlreadyDoneToday && numCardsToAdd > 0) {
-        const [newWords, newJlpt] = await getNextWords(user, numCardsToAdd);
-        user = await addToUpcoming(id, newWords, newJlpt);
+        const [newWords, newJlpt] = await CardModel.getNextWords(user, numCardsToAdd);
+        user = await WordModel.addToUpcoming(id, newWords, newJlpt);
       }
 
       resolve(user);
