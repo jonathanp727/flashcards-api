@@ -3,7 +3,7 @@ import { ObjectId } from 'mongodb';
 import MongoClient from '../lib/MongoClient';
 import { isSameDay } from '../lib/dateLogic';
 import { getNextWords } from './card';
-import { DEFAULT_WORD_SCHEMA } from './word';
+import { addToUpcoming } from './word';
 
 const USER_COLL = 'users';
 
@@ -80,7 +80,7 @@ exports.delete = (id) => (
 );
 
 // Gets user and also checks if new cards should be added, doing so if necessary
-exports.addToUpcoming = (id) => (
+exports.getWithUpcoming = (id) => (
   new Promise(async (resolve, reject) => {
     try {
       var user = await exports.get(id);
@@ -90,26 +90,10 @@ exports.addToUpcoming = (id) => (
 
       if (!isAlreadyDoneToday && numCardsToAdd > 0) {
         const [newWords, newJlpt] = await getNextWords(user, numCardsToAdd);
-        const schema = Object.assign({}, DEFAULT_WORD_SCHEMA);
-        schema.upcoming = true;
-        const setWordsQuery = {};
-        newWords.forEach(wordId => {
-          setWordsQuery[`words.${wordId}`] = schema;
-          setWordsQuery.cardData.lastSession.date = new Date().getTime();
-          user.upcoming.push(wordId);
-          user.words[wordId] = Object.assign({}, schema);
-        });
-
-        MongoClient.getDb().collection(USER_COLL).updateOne({ _id: ObjectId(id) }, {
-          $push: { upcoming: { $each: newWords }},
-          $set: { ...setWordsQuery, jlpt: newJlpt },
-        }, (err) => {
-          if (err) reject(err);
-          else resolve(user);
-        });
-      } else {
-        resolve(user);
+        user = await addToUpcoming(id, newWords, newJlpt);
       }
+
+      resolve(user);
     } catch (getUserErr) {
       reject(getUserErr);
     }
