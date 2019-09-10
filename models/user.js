@@ -3,7 +3,7 @@ import { ObjectId } from 'mongodb';
 import MongoClient from '../lib/MongoClient';
 import { isSameDay } from '../lib/dateLogic';
 import CardModel from './card';
-import WordModel from './word';
+import DictModel from './dict';
 
 const USER_COLL = 'users';
 
@@ -96,8 +96,23 @@ exports.getWithUpcoming = (id) => (
       const isAlreadyDoneToday = isSameDay(new Date(user.cardData.lastSession.date), new Date());
 
       if (!isAlreadyDoneToday && numCardsToAdd > 0) {
-        const [newWords, newJlpt] = await CardModel.getNextWords(user, numCardsToAdd);
-        user = await WordModel.addToUpcoming(id, newWords, newJlpt);
+        const cursor = await DictModel.getNextWordsByJlpt(user.cardData.jlpt);
+        const newWords = [];
+        let newJlpt = {};
+        while (newWords.length < numCardsToAdd) {
+          const word = await cursor.next();
+
+          // If there is no existing card for word, push
+          if (!(word._id in user.words) || !user.words[word._id].card) {
+            newWords.push(word._id);
+
+            // If this is the last word to be added, record jlpt stats for updating user's level
+            if(newWords.length === numCardsToAdd) {
+              newJlpt = { level: word.jlpt.level, index: word.jlpt.index + 1 }
+            }
+          }
+        }
+        user = await CardModel.addToUpcoming(id, newWords, newJlpt);
       }
 
       resolve(user);
