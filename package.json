@@ -7,7 +7,7 @@
     "populateDict": "nodemon ./db/populateDict.js --exec babel-node",
     "createTrie": "nodemon ./db/createTrie.js --exec babel-node",
     "test": "nodemon ./test --exec babel-node",
-    "migrate": "nodemon ./db/migration/create_dictionary_text_index.js --exec babel-node"
+    "migrate": "nodemon ./db/migration/index.js --exec babel-node"
   },
   "babel": {
     "presets": [

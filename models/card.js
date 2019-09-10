@@ -7,7 +7,7 @@ import MongoClient from '../lib/MongoClient';
  * are next based on the users JLPT rank.
  *
  * @param user [Object]
- *   upcoming: Array,
+ *   words: Object with wordIds as keys
  *   jlpt: { level: Number, index: Number }
  * @return [
  *    Array of new words, 
@@ -18,8 +18,8 @@ exports.getNextWords = async (user, numCardsToAdd) => (
   new Promise(async (resolve, reject) => {
     const cursor = MongoClient.getDb().collection('dictionary').find({
       $or: [
-        { 'jlpt.level': { $lt: user.jlpt.level } },
-        { 'jlpt.level': { $eq: user.jlpt.level }, 'jlpt.index': { $gte: user.jlpt.index } },
+        { 'jlpt.level': { $lt: user.cardData.jlpt.level } },
+        { 'jlpt.level': { $eq: user.cardData.jlpt.level }, 'jlpt.index': { $gte: user.cardData.jlpt.index } },
       ],
     }).sort(
       { 'jlpt.level': -1, 'jlpt.index': 1 }
@@ -32,7 +32,8 @@ exports.getNextWords = async (user, numCardsToAdd) => (
     let jlpt = {};
     while (newWords.length < numCardsToAdd) {
       const word = await cursor.next();
-      if (!(word._id in user.words)) {
+      // If there is no existing card for word, push
+      if (!(word._id in user.words) || !user.words[word._id].card) {
         newWords.push(word._id);
 
         // If this is the last word to be added, record jlpt stats for updating user's level

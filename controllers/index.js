@@ -4,10 +4,10 @@ import user from './user';
 
 const router = express.Router();
 
-router.use('/user', user);
-
-router.get('/api', (req, res) => {
+router.get('/', (req, res) => {
   res.json({ success: true });
 });
+
+router.use('/user', user);
 
 module.exports = router;

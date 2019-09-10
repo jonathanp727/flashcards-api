@@ -92,7 +92,7 @@ exports.getWithUpcoming = (id) => (
     try {
       var user = await exports.get(id);
 
-      const numCardsToAdd = user.settings.dailyNewCardLimit - upcoming.length;
+      const numCardsToAdd = user.settings.dailyNewCardLimit - user.upcoming.length;
       const isAlreadyDoneToday = isSameDay(new Date(user.cardData.lastSession.date), new Date());
 
       if (!isAlreadyDoneToday && numCardsToAdd > 0) {

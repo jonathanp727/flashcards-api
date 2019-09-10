@@ -4,7 +4,7 @@ import MongoClient from '../lib/MongoClient';
 
 const USER_COLL = 'users';
 
-export const DEFAULT_WORD_SCHEMA = {
+exports.DEFAULT_WORD_SCHEMA = {
   card: null,
   count: 0,
   dates: [],
@@ -25,13 +25,13 @@ export const DEFAULT_WORD_SCHEMA = {
 exports.addToUpcoming = (userId, newWords, newJlpt) => (
   new Promise((resolve, reject) => {
     const setWordsQuery = {};
-    const schema = Object.assign({}, DEFAULT_WORD_SCHEMA);
+    const schema = Object.assign({}, exports.DEFAULT_WORD_SCHEMA);
     schema.upcoming = true;
 
     newWords.forEach(wordId => {
       setWordsQuery[`words.${wordId}`] = schema;
     });
-    setWordsQuery.cardData.lastSession.date = new Date().getTime();
+    setWordsQuery['cardData.lastSession.date'] = new Date().getTime();
     setWordsQuery.jlpt = newJlpt;
 
     MongoClient.getDb().collection(USER_COLL).findOneAndUpdate({ _id: ObjectId(userId) }, {
@@ -41,7 +41,7 @@ exports.addToUpcoming = (userId, newWords, newJlpt) => (
       returnOriginal: false,
     }, (err, result) => {
       if (err) reject(err);
-      else resolve(result);
+      else resolve(result.value);
     });
   })
 );
