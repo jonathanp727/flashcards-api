@@ -2,7 +2,7 @@ import { ObjectId } from 'mongodb';
 
 import MongoClient from '../lib/MongoClient';
 import { isSameDay } from '../lib/dateLogic';
-import CardModel from './card';
+import WordModel from './word';
 import DictModel from './dict';
 
 const USER_COLL = 'users';
@@ -112,7 +112,7 @@ exports.getWithUpcoming = (id) => (
             }
           }
         }
-        user = await CardModel.addToUpcoming(id, newWords, newJlpt);
+        user = await WordModel.addToUpcoming(id, newWords, newJlpt);
       }
 
       resolve(user);
