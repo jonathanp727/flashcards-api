@@ -47,8 +47,10 @@ exports.new = (data) => (
         },
       },
       words: {},
-      cards: [],
-      upcoming: [],
+      cards: {
+        inProg: [],
+        upcoming: [],
+      },
       calendar: [
       ],
     }, (err, result) => {
