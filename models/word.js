@@ -107,6 +107,71 @@ exports.doCard = (userId, wordId, upcoming, responseQuality) => (
 );
 
 /**
+ * Increments the lookup counter of a word for a particular user and determines
+ * if the word should be added to the "upcoming" flashcards array.
+ *
+ * @param userId     ObjectId
+ * @param wordId     ObjectId
+ * @param wordJlpt   { level: Number, index: Number }
+ * @param kindaKnew  boolean   // Marks whether the user kind of knew the word or didn't at all
+ */
+exports.increment = (userId, wordId, wordJlpt = { level: 0 }, kindaKnew) => (
+  new Promise((resolve, reject) => {
+    const date = new Date().getTime();
+    MongoClient.getDb().collection(USER_COLL).findOne({
+      _id: ObjectId(userId),
+    }, async (err, user) => {
+      // Retrieve and update word entry if exists, otherwise create
+      let word = user.words[wordId];
+      if (!word) {
+        word = createWord();
+        word.dict.count = 1;
+        word.dict.dates.push({ date, kindaKnew });
+      } else {
+        word.dict.count += 1;
+        word.dict.dates.push({ date, kindaKnew });
+      }
+
+      let query = {};
+
+      // If no card, do check and create if necessary
+      if (word.card === null) {
+        var { newCard, isNew } = shouldCreateCard(user, word, wordJlpt.level, kindaKnew);
+        if (newCard !== null) {
+          word.card = newCard;
+          if (isNew) {
+            query.$push = { upcoming: ObjectId(wordId) };
+          } else {
+            query.$push = {
+              'cards.inProg': {
+                '$each': [ ObjectId(wordId) ],
+                '$position': getNewCardPos(user, newCard),
+              },
+            };
+          }
+        }
+      // Else update existing card
+      } else {
+        user.cards.inProg = (await pullCard(userId, wordId)).cards.inProg;
+        word.card = new Card(word.card);
+        word.card.increment(kindaKnew);
+        query.$push = {
+          'cards.inProg': {
+            '$each': [ ObjectId(wordId) ],
+            '$position': getNewCardPos(user, word.card),
+          },
+        };
+      }
+      query.$set = { [`words.${wordId}`]: word };
+
+      MongoClient.getDb().collection(COLL_NAME).updateOne({ _id: ObjectId(userId) }, query, err => {
+        callback(err);
+      });
+    });
+  }
+);
+
+/**
  * Finds the new position in the user inProg cards array for `card` to be placed at.  Make sure to pull
  * the card from user before calling this function.
  *
@@ -114,7 +179,7 @@ exports.doCard = (userId, wordId, upcoming, responseQuality) => (
  * @param card     Object
  * @return Number (new position)
  */
-exports.getNewCardPos = (user, card) => {
+const getNewCardPos = (user, card) => {
   const { inProg } = user.cards;
   let pos = 0;
   
@@ -124,3 +189,17 @@ exports.getNewCardPos = (user, card) => {
 
   return pos;
 }
+
+// Helper function because I needed an async/await way to pull card before pushing into new position
+const pullCard = (userId, wordId) => (
+  new Promise((resolve, reject) => {
+    MongoClient.getDb().collection('users').findOneAndUpdate({ _id: ObjectId(userId)}, {
+      $pull: { 'cards.inProg': ObjectId(wordId) }
+    }, {
+      returnOriginal: false,
+    }, (err, result) => {
+        if (err) reject(err);
+        else resolve(result);
+    });
+  })
+);
