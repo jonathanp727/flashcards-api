@@ -7,6 +7,54 @@ import DictModel from './dict';
 
 const USER_COLL = 'users';
 
+const User = function (user = null) {
+  if (user) {
+    this._id = user._id;
+    this.general = user.general;
+    this.settings = user.settings;
+    this.cardData = user.cardData;
+    this.words = user.words;
+    this.cards = user.cards;
+    this.calendar = user.calendar;
+  } else {
+    this.general = {
+      username: data.username,
+      password: data.password,
+      isAdmin: false,
+    };
+    this.settings = {
+      dailyNewCardLimit: 5,
+    };
+    this.cardData = {
+      lastSession: {
+        date: null,
+        upcomingCardsDone: 0,
+      },
+      jlpt: {
+        level: data.level,
+        index: 0,
+      },
+    };
+    this.words = {};
+    this.cards = {
+      inProg: [],
+      upcoming: [],
+    };
+    this.calendar = [
+    ];
+  }
+
+  Object.defineProperty(this, '_data_', {
+    value: {
+      dirty: user === null,
+      query: {},
+    },
+    writable: true,
+    enumerable: false,
+    configurable: false,
+  }
+}
+
 exports.all = () => (
   new Promise((resolve, reject) => {
     MongoClient.getDb().collection(USER_COLL).find().toArray((err, result) => {
@@ -92,29 +140,12 @@ exports.delete = (id) => (
 exports.getWithUpcoming = (id) => (
   new Promise(async (resolve, reject) => {
     try {
-      var user = await exports.get(id);
-
+      let user = await exports.get(id);
       const numCardsToAdd = user.settings.dailyNewCardLimit - user.upcoming.length;
       const isAlreadyDoneToday = isSameDay(new Date(user.cardData.lastSession.date), new Date());
 
       if (!isAlreadyDoneToday && numCardsToAdd > 0) {
-        const cursor = await DictModel.getNextWordsByJlpt(user.cardData.jlpt);
-        const newWords = [];
-        let newJlpt = {};
-        while (newWords.length < numCardsToAdd) {
-          const word = await cursor.next();
-
-          // If there is no existing card for word, push
-          if (!(word._id in user.words) || !user.words[word._id].card) {
-            newWords.push(word._id);
-
-            // If this is the last word to be added, record jlpt stats for updating user's level
-            if(newWords.length === numCardsToAdd) {
-              newJlpt = { level: word.jlpt.level, index: word.jlpt.index + 1 }
-            }
-          }
-        }
-        user = await WordModel.addToUpcoming(id, newWords, newJlpt);
+        user = getNewCards(user, numCardsToAdd);
       }
 
       resolve(user);
@@ -123,3 +154,23 @@ exports.getWithUpcoming = (id) => (
     }
   })
 );
+
+const getNewCards = (user, numCardsToAdd) => {
+  const cursor = await DictModel.getNextWordsByJlpt(user.cardData.jlpt);
+  const newWords = [];
+  let newJlpt = {};
+  while (newWords.length < numCardsToAdd) {
+    const word = await cursor.next();
+
+    // If there is no existing card for word, push
+    if (!(word._id in user.words) || !user.words[word._id].card) {
+      newWords.push(word._id);
+
+      // If this is the last word to be added, record jlpt stats for updating user's level
+      if(newWords.length === numCardsToAdd) {
+        newJlpt = { level: word.jlpt.level, index: word.jlpt.index + 1 }
+      }
+    }
+  }
+  user = await WordModel.addToUpcoming(id, newWords, newJlpt);
+}
