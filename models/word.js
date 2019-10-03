@@ -168,7 +168,7 @@ exports.increment = (userId, wordId, wordJlpt = { level: 0 }, kindaKnew) => (
         callback(err);
       });
     });
-  }
+  })
 );
 
 /**

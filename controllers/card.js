@@ -1,12 +1,14 @@
 import express from 'express';
-import CardModel = from '../models/card';
+import WordModel from '../models/word';
 
 const router = express.Router();
 
 router.post('/', (req, res, next) => {
-  CardModel.doCard(res.userId, res.wordId, res.upcoming, res.responseQuality)
+  WordModel.doCard(res.userId, res.wordId, res.upcoming, res.responseQuality)
     .then(
       result => res.json({ success: true }),
       err => next(err),
     );
 });
+
+module.exports = router;

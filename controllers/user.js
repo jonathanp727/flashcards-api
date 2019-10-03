@@ -14,7 +14,7 @@ router.get('/', async (req, res, next) => {
 
 // show
 router.get('/:id', (req, res, next) => {
-  UserModel.getWithUpcoming(req.params.id)
+  UserModel.get(req.params.id)
     .then(
       result => res.json(result),
       err => next(err),

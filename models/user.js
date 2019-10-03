@@ -7,25 +7,25 @@ import DictModel from './dict';
 
 const USER_COLL = 'users';
 
-const User = function (user = null) {
-  if (user) {
-    this._id = user._id;
-    this.general = user.general;
-    this.settings = user.settings;
-    this.cardData = user.cardData;
-    this.words = user.words;
-    this.cards = user.cards;
-    this.calendar = user.calendar;
-  } else {
-    this.general = {
+exports.all = () => (
+  MongoClient.getDb().collection(USER_COLL).find().toArray()
+);
+
+exports.get = (id) => (
+  MongoClient.getDb().collection(USER_COLL).findOne({ _id: ObjectId(id) })
+);
+
+exports.new = (data) => (
+  MongoClient.getDb().collection(USER_COLL).insertOne({
+    general: {
       username: data.username,
       password: data.password,
       isAdmin: false,
-    };
-    this.settings = {
+    },
+    settings: {
       dailyNewCardLimit: 5,
-    };
-    this.cardData = {
+    },
+    cardData: {
       lastSession: {
         date: null,
         upcomingCardsDone: 0,
@@ -34,99 +34,26 @@ const User = function (user = null) {
         level: data.level,
         index: 0,
       },
-    };
-    this.words = {};
-    this.cards = {
+    },
+    words: {},
+    cards: {
       inProg: [],
       upcoming: [],
-    };
-    this.calendar = [
-    ];
-  }
-
-  Object.defineProperty(this, '_data_', {
-    value: {
-      dirty: user === null,
-      query: {},
     },
-    writable: true,
-    enumerable: false,
-    configurable: false,
-  }
-}
-
-exports.all = () => (
-  new Promise((resolve, reject) => {
-    MongoClient.getDb().collection(USER_COLL).find().toArray((err, result) => {
-      if (err) reject(err);
-      else resolve(result);
-    });
-  })
-);
-
-exports.get = (id) => (
-  new Promise((resolve, reject) => {
-    MongoClient.getDb().collection(USER_COLL).findOne({ _id: ObjectId(id) }, (err, result) => {
-      if (err) reject(err);
-      else resolve(result);
-    });
-  })
-);
-
-exports.new = (data) => (
-  new Promise((resolve, reject) => {
-    MongoClient.getDb().collection(USER_COLL).insertOne({
-      general: {
-        username: data.username,
-        password: data.password,
-        isAdmin: false,
-      },
-      settings: {
-        dailyNewCardLimit: 5,
-      },
-      cardData: {
-        lastSession: {
-          date: null,
-          upcomingCardsDone: 0,
-        },
-        jlpt: {
-          level: data.level,
-          index: 0,
-        },
-      },
-      words: {},
-      cards: {
-        inProg: [],
-        upcoming: [],
-      },
-      calendar: [
-      ],
-    }, (err, result) => {
-      if (err) reject(err);
-      else resolve(result.insertedId);
-    });
-  })
+    calendar: [
+    ],
+  }).then(res => res.insertedId)
 );
 
 exports.update = (id, data) => (
-  new Promise((resolve, reject) => {
-    MongoClient.getDb().collection(USER_COLL).updateOne({ _id: ObjectId(id) }, {
-      'general.username': data.username,
-      'general.password': data.password,
-    }, (err) => {
-      if (err) reject(err);
-      else resolve();
-    });
+  MongoClient.getDb().collection(USER_COLL).updateOne({ _id: ObjectId(id) }, {
+    'general.username': data.username,
+    'general.password': data.password,
   })
 );
 
 exports.delete = (id) => (
-  new Promise((resolve, reject) => {
-    MongoClient.getDb().collection(USER_COLL).deleteOne({ _id: ObjectId(id) }, (err) => {
-      if (err) reject(err);
-      else resolve();
-    });
-  })
+  MongoClient.getDb().collection(USER_COLL).deleteOne({ _id: ObjectId(id) })
 );
 
 /**
@@ -137,25 +64,15 @@ exports.delete = (id) => (
  * @param id Mongo UserId
  * @return         Updated user object
  */
-exports.getWithUpcoming = (id) => (
-  new Promise(async (resolve, reject) => {
-    try {
-      let user = await exports.get(id);
-      const numCardsToAdd = user.settings.dailyNewCardLimit - user.upcoming.length;
-      const isAlreadyDoneToday = isSameDay(new Date(user.cardData.lastSession.date), new Date());
+exports.getWithUpcoming = async (id) => {
+  let user = await exports.get(id);
+  const numCardsToAdd = user.settings.dailyNewCardLimit - user.upcoming.length;
+  const isAlreadyDoneToday = isSameDay(new Date(user.cardData.lastSession.date), new Date());
+  if (!isAlreadyDoneToday && numCardsToAdd > 0) user = await getNewCards(user, numCardsToAdd);
+  return user;
+};
 
-      if (!isAlreadyDoneToday && numCardsToAdd > 0) {
-        user = getNewCards(user, numCardsToAdd);
-      }
-
-      resolve(user);
-    } catch (getUserErr) {
-      reject(getUserErr);
-    }
-  })
-);
-
-const getNewCards = (user, numCardsToAdd) => {
+const getNewCards = async (user, numCardsToAdd) => {
   const cursor = await DictModel.getNextWordsByJlpt(user.cardData.jlpt);
   const newWords = [];
   let newJlpt = {};
@@ -172,5 +89,5 @@ const getNewCards = (user, numCardsToAdd) => {
       }
     }
   }
-  user = await WordModel.addToUpcoming(id, newWords, newJlpt);
+  return await WordModel.addToUpcoming(id, newWords, newJlpt);
 }
