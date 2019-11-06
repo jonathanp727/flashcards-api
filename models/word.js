@@ -31,27 +31,22 @@ const createWord = (createWithCard = false) => ({
  * @param newJlpt   { level: Number, index: Number }
  * @return          Updated user object
  */
-exports.addToUpcoming = (userId, newWords, newJlpt) => (
-  new Promise((resolve, reject) => {
-    const setWordsQuery = {};
-    const schema = createWord(true);
+exports.addToUpcoming = (userId, newWords, newJlpt) => {
+  const setWordsQuery = {};
+  const schema = createWord(true);
 
-    newWords.forEach(wordId => {
-      setWordsQuery[`words.${wordId}`] = schema;
-    });
-    setWordsQuery['cardData.lastSession.date'] = new Date().getTime();
+  newWords.forEach(wordId => {
+    setWordsQuery[`words.${wordId}`] = schema;
+  });
+  setWordsQuery['cardData.lastSession.date'] = new Date().getTime();
 
-    MongoClient.getDb().collection(USER_COLL).findOneAndUpdate({ _id: ObjectId(userId) }, {
-      $push: { 'cards.upcoming': { $each: newWords }},
-      $set: { ...setWordsQuery, 'cardData.jlpt': newJlpt },
-    }, {
-      returnOriginal: false,
-    }, (err, result) => {
-      if (err) reject(err);
-      else resolve(result.value);
-    });
-  })
-);
+  return MongoClient.getDb().collection(USER_COLL).findOneAndUpdate({ _id: ObjectId(userId) }, {
+    $push: { 'cards.upcoming': { $each: newWords }},
+    $set: { ...setWordsQuery, 'cardData.jlpt': newJlpt },
+  }, {
+    returnOriginal: false,
+  });
+}
 
 /**
  * Determines new interval for flashcard based on responseQuality (1-5).  Then updates the words
@@ -63,48 +58,43 @@ exports.addToUpcoming = (userId, newWords, newJlpt) => (
  * @param upcoming        Boolean  True if card is in upcoming arr and not in cards arr
  * @param responseQuality Number (from 1 to 5)
  */
-exports.doCard = (userId, wordId, upcoming, responseQuality) => (
-  new Promise(async (resolve, reject) => {
-    let query = {};
-    
-    // Set pull query depending on which array the card previously belonged to
-    if (upcoming) {
-      query.$pull = { 'cards.upcoming': ObjectId(wordId) };
-    } else {
-      query.$pull = { 'cards.inProg': ObjectId(wordId) };
-    };
+exports.doCard = (userId, wordId, upcoming, responseQuality) => {
+  let query = {};
+  
+  // Set pull query depending on which array the card previously belonged to
+  if (upcoming) {
+    query.$pull = { 'cards.upcoming': ObjectId(wordId) };
+  } else {
+    query.$pull = { 'cards.inProg': ObjectId(wordId) };
+  };
 
-    // Pull card before getting user to make sure we have updated version of cards arr and query
-    // for user in order to find new position of card in array
-    MongoClient.getDb().collection(USER_COLL).findOneAndUpdate({
-      _id: ObjectId(userId)
-    }, query, {
-      returnOriginal: false,
-    }, (err, user) => {
-      if (err) reject(err);
+  // Pull card before getting user to make sure we have updated version of cards arr and query
+  // for user in order to find new position of card in array
+  MongoClient.getDb().collection(USER_COLL).findOneAndUpdate({
+    _id: ObjectId(userId)
+  }, query, {
+    returnOriginal: false,
+  }, (err, user) => {
+    if (err) return new Promise((resolve, reject) => reject(err));
 
-      const card = new Card(user.words[wordId].card).processInterval(responseQuality)
+    const card = new Card(user.words[wordId].card).processInterval(responseQuality)
 
-      // Find new position of card
-      const pos = getNewCardPos(user, card);
+    // Find new position of card
+    const pos = getNewCardPos(user, card);
 
-      MongoClient.getDb().collection('users').updateOne({ _id: ObjectId(userId) }, {
-        $set: {
-          [`words.${wordId}.card`]: card,
+    return MongoClient.getDb().collection('users').updateOne({ _id: ObjectId(userId) }, {
+      $set: {
+        [`words.${wordId}.card`]: card,
+      },
+      $push: {
+        'cards.inProg': {
+          '$each': [ ObjectId(wordId) ],
+          '$position': pos,
         },
-        $push: {
-          'cards.inProg': {
-            '$each': [ ObjectId(wordId) ],
-            '$position': pos,
-          },
-        },
-      }, err => {
-        if (err) reject(err);
-        else resolve();
-      });
+      },
     });
-  })
-);
+  });
+}
 
 /**
  * Increments the lookup counter of a word for a particular user and determines
@@ -115,61 +105,57 @@ exports.doCard = (userId, wordId, upcoming, responseQuality) => (
  * @param wordJlpt   { level: Number, index: Number }
  * @param kindaKnew  boolean   // Marks whether the user kind of knew the word or didn't at all
  */
-exports.increment = (userId, wordId, wordJlpt = { level: 0 }, kindaKnew) => (
-  new Promise((resolve, reject) => {
-    const date = new Date().getTime();
-    MongoClient.getDb().collection(USER_COLL).findOne({
-      _id: ObjectId(userId),
-    }, async (err, user) => {
-      // Retrieve and update word entry if exists, otherwise create
-      let word = user.words[wordId];
-      if (!word) {
-        word = createWord();
-        word.dict.count = 1;
-        word.dict.dates.push({ date, kindaKnew });
-      } else {
-        word.dict.count += 1;
-        word.dict.dates.push({ date, kindaKnew });
-      }
+exports.increment = (userId, wordId, wordJlpt = { level: 0 }, kindaKnew) => {
+  const date = new Date().getTime();
+  MongoClient.getDb().collection(USER_COLL).findOne({
+    _id: ObjectId(userId),
+  }, async (err, user) => {
+    // Retrieve and update word entry if exists, otherwise create
+    let word = user.words[wordId];
+    if (!word) {
+      word = createWord();
+      word.dict.count = 1;
+      word.dict.dates.push({ date, kindaKnew });
+    } else {
+      word.dict.count += 1;
+      word.dict.dates.push({ date, kindaKnew });
+    }
 
-      let query = {};
+    let query = {};
 
-      // If no card, do check and create if necessary
-      if (word.card === null) {
-        var { newCard, isNew } = shouldCreateCard(user, word, wordJlpt.level, kindaKnew);
-        if (newCard !== null) {
-          word.card = newCard;
-          if (isNew) {
-            query.$push = { upcoming: ObjectId(wordId) };
-          } else {
-            query.$push = {
-              'cards.inProg': {
-                '$each': [ ObjectId(wordId) ],
-                '$position': getNewCardPos(user, newCard),
-              },
-            };
-          }
+    // If no card, do check and create if necessary
+    if (word.card === null) {
+      var { newCard, isNew } = shouldCreateCard(user, word, wordJlpt.level, kindaKnew);
+      if (newCard !== null) {
+        word.card = newCard;
+        if (isNew) {
+          query.$push = { upcoming: ObjectId(wordId) };
+        } else {
+          query.$push = {
+            'cards.inProg': {
+              '$each': [ ObjectId(wordId) ],
+              '$position': getNewCardPos(user, newCard),
+            },
+          };
         }
-      // Else update existing card
-      } else {
-        user.cards.inProg = (await pullCard(userId, wordId)).cards.inProg;
-        word.card = new Card(word.card);
-        word.card.increment(kindaKnew);
-        query.$push = {
-          'cards.inProg': {
-            '$each': [ ObjectId(wordId) ],
-            '$position': getNewCardPos(user, word.card),
-          },
-        };
       }
-      query.$set = { [`words.${wordId}`]: word };
+    // Else update existing card
+    } else {
+      user.cards.inProg = (await pullCard(userId, wordId)).cards.inProg;
+      word.card = new Card(word.card);
+      word.card.increment(kindaKnew);
+      query.$push = {
+        'cards.inProg': {
+          '$each': [ ObjectId(wordId) ],
+          '$position': getNewCardPos(user, word.card),
+        },
+      };
+    }
+    query.$set = { [`words.${wordId}`]: word };
 
-      MongoClient.getDb().collection(COLL_NAME).updateOne({ _id: ObjectId(userId) }, query, err => {
-        callback(err);
-      });
-    });
-  })
-);
+    return MongoClient.getDb().collection(COLL_NAME).updateOne({ _id: ObjectId(userId) }, query);
+  });
+}
 
 /**
  * Finds the new position in the user inProg cards array for `card` to be placed at.  Make sure to pull

@@ -78,11 +78,9 @@ const getNewCards = async (user, numCardsToAdd) => {
   let newJlpt = {};
   while (newWords.length < numCardsToAdd) {
     const word = await cursor.next();
-
     // If there is no existing card for word, push
     if (!(word._id in user.words) || !user.words[word._id].card) {
       newWords.push(word._id);
-
       // If this is the last word to be added, record jlpt stats for updating user's level
       if(newWords.length === numCardsToAdd) {
         newJlpt = { level: word.jlpt.level, index: word.jlpt.index + 1 }

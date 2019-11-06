@@ -1,7 +1,7 @@
 import express from 'express';
 
 import user from './user';
-import card from './card';
+import word from './word';
 
 const router = express.Router();
 
@@ -10,6 +10,6 @@ router.get('/', (req, res) => {
 });
 
 router.use('/user', user);
-router.use('/card', card);
+router.use('/word', word);
 
 module.exports = router;

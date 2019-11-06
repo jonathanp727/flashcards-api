@@ -11,4 +11,12 @@ router.post('/', (req, res, next) => {
     );
 });
 
+router.post('/inc', (req, res, next) => {
+  WordModel.increment(res.userId, res.wordId, res.wordJlpt, res.kindaKnew)
+    .then(
+      result => res.json({ success: true }),
+      err => next(err),
+    );
+});
+
 module.exports = router;
