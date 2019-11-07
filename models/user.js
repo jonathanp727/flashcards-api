@@ -28,7 +28,7 @@ exports.new = (data) => (
     cardData: {
       lastSession: {
         date: null,
-        upcomingCardsDone: 0,
+        upcomingCardsDone: 0, // Limit the amount of new cards a user can see in a day
       },
       jlpt: {
         level: data.level,
@@ -66,7 +66,7 @@ exports.delete = (id) => (
  */
 exports.getWithUpcoming = async (id) => {
   let user = await exports.get(id);
-  const numCardsToAdd = user.settings.dailyNewCardLimit - user.upcoming.length;
+  const numCardsToAdd = user.settings.dailyNewCardLimit - user.cards.upcoming.length;
   const isAlreadyDoneToday = isSameDay(new Date(user.cardData.lastSession.date), new Date());
   if (!isAlreadyDoneToday && numCardsToAdd > 0) user = await getNewCards(user, numCardsToAdd);
   return user;
@@ -87,5 +87,5 @@ const getNewCards = async (user, numCardsToAdd) => {
       }
     }
   }
-  return await WordModel.addToUpcoming(id, newWords, newJlpt);
+  return await WordModel.addToUpcoming(user._id, newWords, newJlpt);
 }
