@@ -2,6 +2,7 @@ import { ObjectId } from 'mongodb';
 
 import MongoClient from '../lib/MongoClient';
 import { isSameDay } from '../lib/dateLogic';
+import stats from '../lib/statsHandler'; 
 import WordModel from './word';
 import DictModel from './dict';
 
@@ -42,6 +43,7 @@ exports.new = (data) => (
     },
     calendar: [
     ],
+    stats: new stats.User(),
   }).then(res => res.insertedId)
 );
 

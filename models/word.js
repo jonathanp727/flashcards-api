@@ -2,6 +2,7 @@ import { ObjectId } from 'mongodb';
 
 import MongoClient from '../lib/MongoClient';
 import Card from '../lib/cardLogic';
+import stats from '../lib/wordLogic';
 
 const USER_COLL = 'users';
 
@@ -12,12 +13,12 @@ const USER_COLL = 'users';
  * @return                       Word object
  */
 const createWord = (createWithCard = false) => ({
-  dict: {
-    count: 0,
-    dates: [],
+  aux: {
     sentences: [],
-  },
+    notes: "",
+  }
   card: createWithCard ? new Card() : null,
+  stats: new stats.Word(),
 });
 
 /**
@@ -77,7 +78,10 @@ exports.doCard = (userId, wordId, upcoming, responseQuality) => {
   }, (err, user) => {
     if (err) return new Promise((resolve, reject) => reject(err));
 
-    const card = new Card(user.words[wordId].card).processInterval(responseQuality)
+    const card = new Card(user.words[wordId].card).processInterval(responseQuality);
+    const wordStats = new stats.Word(user.words[wordId].stats.word);
+    const userStats = new stats.User(user.stats);
+    stats.handleDoCard(responseQuality, wordStats, userStats);
 
     // Find new position of card
     const pos = getNewCardPos(user, card);
@@ -85,6 +89,8 @@ exports.doCard = (userId, wordId, upcoming, responseQuality) => {
     return MongoClient.getDb().collection('users').updateOne({ _id: ObjectId(userId) }, {
       $set: {
         [`words.${wordId}.card`]: card,
+        [`words.${wordId}.stats.word`]: wordStats,
+        stats: userStats
       },
       $push: {
         'cards.inProg': {
@@ -106,20 +112,11 @@ exports.doCard = (userId, wordId, upcoming, responseQuality) => {
  * @param kindaKnew  boolean   // Marks whether the user kind of knew the word or didn't at all
  */
 exports.increment = (userId, wordId, wordJlpt = { level: 0 }, kindaKnew) => {
-  const date = new Date().getTime();
   MongoClient.getDb().collection(USER_COLL).findOne({
     _id: ObjectId(userId),
   }, async (err, user) => {
     // Retrieve and update word entry if exists, otherwise create
     let word = user.words[wordId];
-    if (!word) {
-      word = createWord();
-      word.dict.count = 1;
-      word.dict.dates.push({ date, kindaKnew });
-    } else {
-      word.dict.count += 1;
-      word.dict.dates.push({ date, kindaKnew });
-    }
 
     let query = {};
 
@@ -139,19 +136,27 @@ exports.increment = (userId, wordId, wordJlpt = { level: 0 }, kindaKnew) => {
           };
         }
       }
+      query.$set = { [`words.${wordId}`]: word };
     // Else update existing card
     } else {
       user.cards.inProg = (await pullCard(userId, wordId)).cards.inProg;
       word.card = new Card(word.card);
       word.card.increment(kindaKnew);
+      const wordStats = new stats.Word(word.stats);
+      const userStats = new stats.User(user.stats);
+      stats.handleIncrement(kindaKnew, wordStats, userStats);
       query.$push = {
         'cards.inProg': {
           '$each': [ ObjectId(wordId) ],
           '$position': getNewCardPos(user, word.card),
         },
       };
+      query.$set = {
+        [`words.${wordId}`]: word,
+        [`words.${wordId}.stats`]: wordStats,
+        user.stats: userStats, 
+      };
     }
-    query.$set = { [`words.${wordId}`]: word };
 
     return MongoClient.getDb().collection(COLL_NAME).updateOne({ _id: ObjectId(userId) }, query);
   });
