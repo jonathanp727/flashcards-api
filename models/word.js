@@ -2,7 +2,7 @@ import { ObjectId } from 'mongodb';
 
 import MongoClient from '../lib/MongoClient';
 import Card from '../lib/cardLogic';
-import stats from '../lib/wordLogic';
+import stats from '../lib/statsHandler';
 
 const USER_COLL = 'users';
 
@@ -16,7 +16,7 @@ const createWord = (createWithCard = false) => ({
   aux: {
     sentences: [],
     notes: "",
-  }
+  },
   card: createWithCard ? new Card() : null,
   stats: new stats.Word(),
 });
@@ -154,7 +154,7 @@ exports.increment = (userId, wordId, wordJlpt = { level: 0 }, kindaKnew) => {
       query.$set = {
         [`words.${wordId}`]: word,
         [`words.${wordId}.stats`]: wordStats,
-        user.stats: userStats, 
+        [user.stats]: userStats, 
       };
     }
 
