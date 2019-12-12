@@ -5,11 +5,14 @@ const router = express.Router();
 
 // get user from token
 router.get('/', async (req, res, next) => {
-  UserModel.getWithUpcoming(req.userId, (err, result) => {
-    if (err) return next(err);
-
-    res.json(result);
-  });
+  UserModel.getWithUpcoming(req.userId)
+    .then(
+      result => res.json(result),
+      err => {
+        err.status = 401;
+        next(err);
+      },
+    );
 });
 
 // show

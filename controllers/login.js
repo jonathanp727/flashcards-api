@@ -15,13 +15,13 @@ router.post('/', (req, res, next) => {
       error.status = 401;
       return next(error);
     } else if (user) {
-      const hashResult = getHashFromSalt(req.body.password, user.salt);
-      if (user.password !== hashResult) {
-        const error = new Error('Authentication failed. User not found.');
+      const hashResult = getHashFromSalt(req.body.password, user.general.salt);
+      if (user.general.password !== hashResult) {
+        const error = new Error('Authentication failed. Wrong password.');
         error.status = 401;
         return next(error);
       }
-      const token = jwt.sign(user._id, 'JWT KEY');
+      const token = jwt.sign({ _id: user._id }, 'JWT KEY');
       res.json({ success: true, message: 'Authenticated', jwt: token, user });
     }
   });

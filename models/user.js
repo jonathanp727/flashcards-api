@@ -36,7 +36,7 @@ exports.new = (data) => {
         upcomingCardsDone: 0, // Limit the amount of new cards a user can see in a day
       },
       jlpt: {
-        level: data.level,
+        level: data.level ? data.level : 5,
         index: 0,
       },
     },
@@ -72,6 +72,7 @@ exports.delete = (id) => (
  */
 exports.getWithUpcoming = async (id) => {
   let user = await exports.get(id);
+  if (!user) throw new Error("User not found");
   const numCardsToAdd = user.settings.dailyNewCardLimit - user.cards.upcoming.length;
   const isAlreadyDoneToday = isSameDay(new Date(user.cardData.lastSession.date), new Date());
   if (!isAlreadyDoneToday && numCardsToAdd > 0) user = await getNewCards(user, numCardsToAdd);
