@@ -20,3 +20,25 @@ exports.getNextWordsByJlpt = async (jlpt, numCardsToAdd) => (
     { 'jlpt.level': -1, 'jlpt.index': 1 }
   ).project({ _id: 1, jlpt: 1 })
 );
+
+exports.lookup = (query) => {
+  if (query.charCodeAt(0) > 255) {
+    // word is japanese
+    return MongoClient.getDb().collection('dictionary').find({
+      $or: [
+        { 'r_ele.reb': query },
+        { 'k_ele.keb': query },
+      ],
+    }).project({ sentences: 0 }).toArray();
+    
+  } else {
+    // // word is english
+    // MongoClient.getDb().collection('dictionary').find({
+    //   $text: { $search: `\"${query}\"` },
+    // }, {
+    //   score: { $meta: "textScore" },
+    // }).project({ sentences: 0 }).toArray((err, res) => {
+    //   callback(err, res);
+    // });
+  }
+}

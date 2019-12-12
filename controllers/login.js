@@ -22,7 +22,7 @@ router.post('/', (req, res, next) => {
         return next(error);
       }
       const token = jwt.sign({ _id: user._id }, 'JWT KEY');
-      res.json({ success: true, message: 'Authenticated', jwt: token, user });
+      res.json({ success: true, message: 'Authenticated', token, user });
     }
   });
 });
