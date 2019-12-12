@@ -5,6 +5,7 @@ import { isSameDay } from '../lib/dateLogic';
 import stats from '../lib/statsHandler'; 
 import WordModel from './word';
 import DictModel from './dict';
+import { saltHashPassword } from '../lib/cryptoUtil';
 
 const USER_COLL = 'users';
 
@@ -16,11 +17,14 @@ exports.get = (id) => (
   MongoClient.getDb().collection(USER_COLL).findOne({ _id: ObjectId(id) })
 );
 
-exports.new = (data) => (
-  MongoClient.getDb().collection(USER_COLL).insertOne({
+exports.new = (data) => {
+  const hashResult = saltHashPassword(data.password);
+
+  return MongoClient.getDb().collection(USER_COLL).insertOne({
     general: {
       username: data.username,
-      password: data.password,
+      password: hashResult.passwordHash,
+      salt: hashResult.salt,
       isAdmin: false,
     },
     settings: {
@@ -44,8 +48,8 @@ exports.new = (data) => (
     calendar: [
     ],
     stats: new stats.User(),
-  }).then(res => res.insertedId)
-);
+  }).then(res => res.ops[0]);
+};
 
 exports.update = (id, data) => (
   MongoClient.getDb().collection(USER_COLL).updateOne({ _id: ObjectId(id) }, {

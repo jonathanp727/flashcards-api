@@ -7,7 +7,7 @@ import { getHashFromSalt } from '../lib/cryptoUtil.js';
 const router = express.Router();
 
 router.post('/', (req, res, next) => {
-  MongoClient.getDb().collection('users').findOne({ username: req.body.username }, (err, user) => {
+  MongoClient.getDb().collection('users').findOne({ "general.username": req.body.username }, (err, user) => {
     if (err) return next(err);
 
     if (!user) {
@@ -21,8 +21,8 @@ router.post('/', (req, res, next) => {
         error.status = 401;
         return next(error);
       }
-      const token = jwt.sign(user.general, 'JWT KEY');
-      res.json({ success: true, message: 'Authenticated', token, user });
+      const token = jwt.sign(user._id, 'JWT KEY');
+      res.json({ success: true, message: 'Authenticated', jwt: token, user });
     }
   });
 });

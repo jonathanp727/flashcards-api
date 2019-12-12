@@ -3,13 +3,13 @@ import UserModel from '../models/user';
 
 const router = express.Router();
 
-// index
+// get user from token
 router.get('/', async (req, res, next) => {
-  UserModel.all()
-    .then(
-      result => res.json(result),
-      err => next(err),
-    );
+  UserModel.getWithUpcoming(req.userId, (err, result) => {
+    if (err) return next(err);
+
+    res.json(result);
+  });
 });
 
 // show

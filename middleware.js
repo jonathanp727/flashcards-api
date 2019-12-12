@@ -3,7 +3,7 @@ import jwt from 'jsonwebtoken';
 const middleware = {
   // route middleware to verify a token
   authenticate(req, res, next) {
-    const token = req.body.token || req.headers['x-access-token'];
+    const token = req.headers.authorization ? req.headers.authorization.substring(7) : null; // Remove 'Bearer '
     if (token) {
       jwt.verify(token, 'JWT KEY', (err, decoded) => {
         if (err) {
@@ -11,7 +11,7 @@ const middleware = {
           error.status = 401;
           next(error);
         } else {
-          req.decoded = decoded;
+          req.userId = decoded._id;
           next();
         }
       });
@@ -21,6 +21,8 @@ const middleware = {
       next(error);
     }
   },
+
+
 };
 
 export default middleware;
