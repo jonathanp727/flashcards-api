@@ -12,9 +12,9 @@ router.post('/', (req, res, next) => {
 });
 
 router.post('/inc', (req, res, next) => {
-  WordModel.increment(res.userId, res.wordId, res.wordJlpt, res.kindaKnew)
+  WordModel.increment(req.userId, req.body)
     .then(
-      result => res.json({ success: true }),
+      result => res.json(result),
       err => next(err),
     );
 });

@@ -2,6 +2,7 @@ import { ObjectId } from 'mongodb';
 
 import MongoClient from '../lib/MongoClient';
 import Card from '../lib/cardLogic';
+import { shouldCreateCard } from '../lib/cardLogic';
 import stats from '../lib/statsHandler';
 
 const USER_COLL = 'users';
@@ -86,7 +87,7 @@ exports.doCard = (userId, wordId, upcoming, responseQuality) => {
     // Find new position of card
     const pos = getNewCardPos(user, card);
 
-    return MongoClient.getDb().collection('users').updateOne({ _id: ObjectId(userId) }, {
+    return MongoClient.getDb().collection(USER_COLL).findOneAndUpdate({ _id: ObjectId(userId) }, {
       $set: {
         [`words.${wordId}.card`]: card,
         [`words.${wordId}.stats.word`]: wordStats,
@@ -94,12 +95,12 @@ exports.doCard = (userId, wordId, upcoming, responseQuality) => {
       },
       $push: {
         'cards.inProg': {
-          '$each': [ ObjectId(wordId) ],
+          '$each': [ wordId ],
           '$position': pos,
         },
       },
-    });
-  });
+    }, { returnOriginal: false });
+  }).then(res => res.value);
 }
 
 /**
@@ -111,55 +112,63 @@ exports.doCard = (userId, wordId, upcoming, responseQuality) => {
  * @param wordJlpt   { level: Number, index: Number }
  * @param kindaKnew  boolean   // Marks whether the user kind of knew the word or didn't at all
  */
-exports.increment = (userId, wordId, wordJlpt = { level: 0 }, kindaKnew) => {
-  MongoClient.getDb().collection(USER_COLL).findOne({
+exports.increment = async (userId, data) => {
+  const { wordId, wordJlpt = { level: 0}, kindaKnew } = data;
+  const user = await MongoClient.getDb().collection(USER_COLL).findOne({
     _id: ObjectId(userId),
-  }, async (err, user) => {
-    // Retrieve and update word entry if exists, otherwise create
-    let word = user.words[wordId];
-
-    let query = {};
-
-    // If no card, do check and create if necessary
-    if (word.card === null) {
-      var { newCard, isNew } = shouldCreateCard(user, word, wordJlpt.level, kindaKnew);
-      if (newCard !== null) {
-        word.card = newCard;
-        if (isNew) {
-          query.$push = { upcoming: ObjectId(wordId) };
-        } else {
-          query.$push = {
-            'cards.inProg': {
-              '$each': [ ObjectId(wordId) ],
-              '$position': getNewCardPos(user, newCard),
-            },
-          };
-        }
-      }
-      query.$set = { [`words.${wordId}`]: word };
-    // Else update existing card
-    } else {
-      user.cards.inProg = (await pullCard(userId, wordId)).cards.inProg;
-      word.card = new Card(word.card);
-      word.card.increment(kindaKnew);
-      const wordStats = new stats.Word(word.stats);
-      const userStats = new stats.User(user.stats);
-      stats.handleIncrement(kindaKnew, wordStats, userStats);
-      query.$push = {
-        'cards.inProg': {
-          '$each': [ ObjectId(wordId) ],
-          '$position': getNewCardPos(user, word.card),
-        },
-      };
-      query.$set = {
-        [`words.${wordId}`]: word,
-        [`words.${wordId}.stats`]: wordStats,
-        [user.stats]: userStats, 
-      };
-    }
-
-    return MongoClient.getDb().collection(COLL_NAME).updateOne({ _id: ObjectId(userId) }, query);
   });
+
+  // Retrieve and update word entry if exists, otherwise create
+  let word = user.words[wordId];
+
+  if (!word) word = createWord();
+
+  let query = {};
+
+  // If no card, do check and create if necessary
+  if (word.card === null) {
+    var { newCard, isNew } = shouldCreateCard(user.cardData.jlpt, word, wordJlpt.level, kindaKnew);
+    if (newCard !== null) {
+      word.card = newCard;
+      if (isNew) {
+        query.$push = { upcoming: ObjectId(wordId) };
+      } else {
+        query.$push = {
+          'cards.inProg': {
+            '$each': [ wordId ],
+            '$position': getNewCardPos(user, newCard),
+          },
+        };
+      }
+    }
+    query.$set = { [`words.${wordId}`]: word };
+  // Else update existing card
+  } else {
+    user.cards.inProg = (await pullCard(userId, wordId)).cards.inProg;
+    word.card = new Card(word.card);
+    word.card.increment(kindaKnew);
+    query.$push = {
+      'cards.inProg': {
+        '$each': [ wordId ],
+        '$position': getNewCardPos(user, word.card),
+      },
+    };
+    query.$set = {
+      [`words.${wordId}`]: word,
+      [user.stats]: userStats, 
+    };
+  }
+
+  const wordStats = new stats.Word(word.stats);
+  const userStats = new stats.User(user.stats);
+  stats.handleIncrement(kindaKnew, wordStats, userStats);
+  word.stats = wordStats;
+
+  return MongoClient.getDb().collection(USER_COLL).findOneAndUpdate(
+    { _id: ObjectId(userId) },
+    query,
+    { returnOriginal: false },
+  ).then(res => res.value);
 }
 
 /**
@@ -183,14 +192,9 @@ const getNewCardPos = (user, card) => {
 
 // Helper function because I needed an async/await way to pull card before pushing into new position
 const pullCard = (userId, wordId) => (
-  new Promise((resolve, reject) => {
-    MongoClient.getDb().collection('users').findOneAndUpdate({ _id: ObjectId(userId)}, {
-      $pull: { 'cards.inProg': ObjectId(wordId) }
-    }, {
-      returnOriginal: false,
-    }, (err, result) => {
-        if (err) reject(err);
-        else resolve(result);
-    });
-  })
+  MongoClient.getDb().collection(USER_COLL).findOneAndUpdate({ _id: ObjectId(userId)}, {
+    $pull: { 'cards.inProg': wordId }
+  }, {
+    returnOriginal: false,
+  }).then(res => res.value)
 );
