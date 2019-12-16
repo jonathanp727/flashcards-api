@@ -59,8 +59,10 @@ exports.addToUpcoming = (userId, newWords, newJlpt) => {
  * @param wordId          ObjectId
  * @param upcoming        Boolean  True if card is in upcoming arr and not in cards arr
  * @param responseQuality Number (from 1 to 5)
+ * @return    { user, redo (boolean that states whether card needs to be redone)}
  */
-exports.doCard = (userId, wordId, upcoming, responseQuality) => {
+exports.doCard = async (userId, data) => {
+  const { wordId, upcoming, responseQuality } = data;
   let query = {};
   
   // Set pull query depending on which array the card previously belonged to
@@ -72,35 +74,34 @@ exports.doCard = (userId, wordId, upcoming, responseQuality) => {
 
   // Pull card before getting user to make sure we have updated version of cards arr and query
   // for user in order to find new position of card in array
-  MongoClient.getDb().collection(USER_COLL).findOneAndUpdate({
+  const user = await MongoClient.getDb().collection(USER_COLL).findOneAndUpdate({
     _id: ObjectId(userId)
   }, query, {
     returnOriginal: false,
-  }, (err, user) => {
-    if (err) return new Promise((resolve, reject) => reject(err));
+  });
 
-    const card = new Card(user.words[wordId].card).processInterval(responseQuality);
-    const wordStats = new stats.Word(user.words[wordId].stats.word);
-    const userStats = new stats.User(user.stats);
-    stats.handleDoCard(responseQuality, wordStats, userStats);
+  const card = new Card(user.words[wordId].card);
+  const redo = card.processInterval(responseQuality);
+  const wordStats = new stats.Word(user.words[wordId].stats.word);
+  const userStats = new stats.User(user.stats);
+  stats.handleDoCard(responseQuality, wordStats, userStats);
 
-    // Find new position of card
-    const pos = getNewCardPos(user, card);
+  // Find new position of card
+  const pos = getNewCardPos(user, card);
 
-    return MongoClient.getDb().collection(USER_COLL).findOneAndUpdate({ _id: ObjectId(userId) }, {
-      $set: {
-        [`words.${wordId}.card`]: card,
-        [`words.${wordId}.stats.word`]: wordStats,
-        stats: userStats
+  return MongoClient.getDb().collection(USER_COLL).findOneAndUpdate({ _id: ObjectId(userId) }, {
+    $set: {
+      [`words.${wordId}.card`]: card,
+      [`words.${wordId}.stats.word`]: wordStats,
+      stats: userStats
+    },
+    $push: {
+      'cards.inProg': {
+        '$each': [ wordId ],
+        '$position': pos,
       },
-      $push: {
-        'cards.inProg': {
-          '$each': [ wordId ],
-          '$position': pos,
-        },
-      },
-    }, { returnOriginal: false });
-  }).then(res => res.value);
+    },
+  }, { returnOriginal: false }).then(res => { user: res.value, redo });
 }
 
 /**

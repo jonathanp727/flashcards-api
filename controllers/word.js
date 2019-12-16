@@ -4,9 +4,9 @@ import WordModel from '../models/word';
 const router = express.Router();
 
 router.post('/', (req, res, next) => {
-  WordModel.doCard(res.userId, res.wordId, res.upcoming, res.responseQuality)
+  WordModel.doCard(req.userId, req.body)
     .then(
-      result => res.json({ success: true }),
+      result => res.json(result),
       err => next(err),
     );
 });
