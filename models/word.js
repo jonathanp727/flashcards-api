@@ -64,12 +64,11 @@ exports.addToUpcoming = (userId, newWords, newJlpt) => {
 exports.doCard = async (userId, data) => {
   const { wordId, upcoming, responseQuality } = data;
   let query = {};
-  
   // Set pull query depending on which array the card previously belonged to
   if (upcoming) {
-    query.$pull = { 'cards.upcoming': ObjectId(wordId) };
+    query.$pull = { 'cards.upcoming': wordId };
   } else {
-    query.$pull = { 'cards.inProg': ObjectId(wordId) };
+    query.$pull = { 'cards.inProg': wordId };
   };
 
   // Pull card before getting user to make sure we have updated version of cards arr and query
@@ -78,7 +77,7 @@ exports.doCard = async (userId, data) => {
     _id: ObjectId(userId)
   }, query, {
     returnOriginal: false,
-  });
+  }).then(res => res.value);
 
   const card = new Card(user.words[wordId].card);
   const redo = card.processInterval(responseQuality);
@@ -101,7 +100,7 @@ exports.doCard = async (userId, data) => {
         '$position': pos,
       },
     },
-  }, { returnOriginal: false }).then(res => { user: res.value, redo });
+  }, { returnOriginal: false }).then(res => ({ user: res.value, redo }));
 }
 
 /**

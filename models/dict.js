@@ -42,3 +42,8 @@ exports.lookup = (query) => {
     // });
   }
 }
+
+// Get a single word entry from dictionary
+exports.get = (wordId) => (
+  MongoClient.getDb().collection('dictionary').findOne({ _id: parseInt(wordId, 10) })
+)

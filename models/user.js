@@ -28,7 +28,6 @@ exports.new = (data) => {
       isAdmin: false,
     },
     settings: {
-      dailyNewCardLimit: 5,
     },
     cardData: {
       lastSession: {
@@ -38,6 +37,9 @@ exports.new = (data) => {
       jlpt: {
         level: data.level ? data.level : 5,
         index: 0,
+      },
+      settings: {
+        dailyNewCardLimit: 5,
       },
     },
     words: {},
@@ -73,9 +75,13 @@ exports.delete = (id) => (
 exports.getWithUpcoming = async (id) => {
   let user = await exports.get(id);
   if (!user) throw new Error("User not found");
-  const numCardsToAdd = user.settings.dailyNewCardLimit - user.cards.upcoming.length;
+  const numCardsToAdd = user.cardData.settings.dailyNewCardLimit - user.cards.upcoming.length;
   const isAlreadyDoneToday = isSameDay(new Date(user.cardData.lastSession.date), new Date());
   if (!isAlreadyDoneToday && numCardsToAdd > 0) user = await getNewCards(user, numCardsToAdd);
+
+  // Join dictionary to user words (temporary fix for not having defs on frontend)
+  await exports.joinDict(user);
+
   return user;
 };
 
@@ -95,4 +101,13 @@ const getNewCards = async (user, numCardsToAdd) => {
     }
   }
   return await WordModel.addToUpcoming(user._id, newWords, newJlpt);
+}
+
+// Convert user wordIDs into dict entries
+exports.joinDict = async (user) => {
+  for (let wordId in user.words) {
+    let entry = await DictModel.get(wordId);
+    user.words[wordId].entry = entry;
+  }
+  return user;
 }
