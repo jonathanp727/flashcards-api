@@ -2,8 +2,9 @@ import { ObjectId } from 'mongodb';
 
 import MongoClient from '../lib/MongoClient';
 import Card from '../lib/cardLogic';
-import { shouldCreateCard } from '../lib/cardLogic';
+import { createKindaKnewCard } from '../lib/cardLogic';
 import stats from '../lib/statsHandler';
+import UpcomingManager from '../lib/UpcomingManager';
 
 const USER_COLL = 'users';
 
@@ -123,20 +124,45 @@ exports.increment = async (userId, data) => {
 
   if (!word) word = createWord();
 
+  const wordStats = new stats.Word(word.stats);
+  const userStats = new stats.User(user.stats);
+  stats.handleIncrement(kindaKnew, wordStats, userStats);
+  word.stats = wordStats;
+
   let query = {};
 
   // If no card, do check and create if necessary
   if (word.card === null) {
-    var { newCard, isNew } = shouldCreateCard(user.cardData.jlpt, word, wordJlpt.level, kindaKnew);
-    if (newCard !== null) {
-      word.card = newCard;
-      if (isNew) {
-        query.$push = { upcoming: ObjectId(wordId) };
-      } else {
+    if (kindaKnew) {
+      // If kindaKnew then add to inProg
+      const newCard = createKindaKnewCard();
+      query.$push = {
+        'cards.inProg': {
+          '$each': [ wordId ],
+          '$position': getNewCardPos(user, newCard),
+        },
+      };  
+    } else {
+      // Else check if should add to upcoming
+      const index = UpcomingManager.getNewCardIndex(
+        word,
+        user.cards.upcoming,
+        user.words,
+        user.cardData.settings.dailyNewCardLimit
+      );
+
+      if (index >= 0) {
+        // If should add to upcoming, start by removing last el of upcoming if it is already full
+        if (user.cards.upcoming.length === UpcomingManager.MAX_UPCOMING_SIZE(user.cardData.settings.dailyNewCardLimit)) {
+          await MongoClient.getDb().collection(USER_COLL).updateOne({ _id: ObjectId(userId)}, {
+            $pull: { 'cards.upcoming': user.cards.upcoming[user.cards.upcoming.length - 1] }
+          });
+          user.cards.upcoming.pop();
+        }
         query.$push = {
-          'cards.inProg': {
+          'cards.upcoming': {
             '$each': [ wordId ],
-            '$position': getNewCardPos(user, newCard),
+            '$position': index,
           },
         };
       }
@@ -158,11 +184,6 @@ exports.increment = async (userId, data) => {
       [user.stats]: userStats, 
     };
   }
-
-  const wordStats = new stats.Word(word.stats);
-  const userStats = new stats.User(user.stats);
-  stats.handleIncrement(kindaKnew, wordStats, userStats);
-  word.stats = wordStats;
 
   return MongoClient.getDb().collection(USER_COLL).findOneAndUpdate(
     { _id: ObjectId(userId) },
