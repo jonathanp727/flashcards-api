@@ -5,7 +5,7 @@ const router = express.Router();
 
 // get user from token
 router.get('/', async (req, res, next) => {
-  UserModel.getWithUpcoming(req.userId)
+  UserModel.get(req.userId)
     .then(
       result => res.json(result),
       err => {
@@ -17,7 +17,7 @@ router.get('/', async (req, res, next) => {
 
 // show
 router.get('/:id', (req, res, next) => {
-  UserModel.getWithUpcoming(req.params.id)
+  UserModel.get(req.params.id)
     .then(
       result => res.json(result),
       err => next(err),
