@@ -19,4 +19,12 @@ router.post('/inc', (req, res, next) => {
     );
 });
 
+router.post('/start', (req, res, next) => {
+  WordModel.startCardSession(req.userId)
+    .then(
+      result => res.json(result),
+      err => next(err),
+    );
+});
+
 module.exports = router;

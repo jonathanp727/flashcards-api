@@ -192,6 +192,18 @@ exports.increment = async (userId, data) => {
   ).then(res => res.value);
 }
 
+exports.startCardSession = await (userId) => {
+  const user = await MongoClient.getDb().collection(USER_COLL).findOne({
+    _id: ObjectId(userId),
+  });
+  const { upcoming, dirty } = UpcomingManager.doPreSessionCheck(user.cards.upcoming, user.words, user.cardData.settings.dailyNewCardLimit);
+  if (!dirty) return { dirty };
+
+  await MongoClient.getDb().collection(USER_COLL).updateOne({ _id: ObjectId(userId) }, { $set: { 'cards.upcoming': upcoming } });
+
+  return { upcoming, dirty }
+}
+
 /**
  * Finds the new position in the user inProg cards array for `card` to be placed at.  Make sure to pull
  * the card from user before calling this function.
