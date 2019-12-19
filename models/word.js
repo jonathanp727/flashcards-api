@@ -1,6 +1,7 @@
 import { ObjectId } from 'mongodb';
 
 import MongoClient from '../lib/MongoClient';
+import UserModel from './user';
 import Card from '../lib/cardLogic';
 import { createKindaKnewCard } from '../lib/cardLogic';
 import stats from '../lib/statsHandler';
@@ -146,16 +147,22 @@ exports.increment = async (userId, data) => {
       // Else check if should add to upcoming
       const index = UpcomingManager.getNewCardIndex(
         word,
+        wordJlpt,
         user.cards.upcoming,
         user.words,
-        user.cardData.settings.dailyNewCardLimit
+        user.cardData.settings.dailyNewCardLimit,
+        user.cardData.jlpt,
       );
 
       if (index >= 0) {
         // If should add to upcoming, start by removing last el of upcoming if it is already full
+        // Also set the word's card to null to indicate it is not in upcoming
         if (user.cards.upcoming.length === UpcomingManager.MAX_UPCOMING_SIZE(user.cardData.settings.dailyNewCardLimit)) {
           await MongoClient.getDb().collection(USER_COLL).updateOne({ _id: ObjectId(userId)}, {
-            $pull: { 'cards.upcoming': user.cards.upcoming[user.cards.upcoming.length - 1] }
+            $pull: { 'cards.upcoming': user.cards.upcoming[user.cards.upcoming.length - 1] },
+            $set: {
+              [`words.${wordId}.card`]: null,
+            },
           });
           user.cards.upcoming.pop();
         }
@@ -167,6 +174,11 @@ exports.increment = async (userId, data) => {
         };
       }
     }
+    query.$set = { [`words.${wordId}`]: word };
+
+  // Word is in upcoming
+  } else if (!word.card.date) {
+    // DO NOTHING FOR NOW LOW PRIORITY
     query.$set = { [`words.${wordId}`]: word };
   // Else update existing card
   } else {
@@ -192,16 +204,21 @@ exports.increment = async (userId, data) => {
   ).then(res => res.value);
 }
 
-exports.startCardSession = await (userId) => {
+exports.startCardSession = async (userId) => {
   const user = await MongoClient.getDb().collection(USER_COLL).findOne({
     _id: ObjectId(userId),
   });
-  const { upcoming, dirty } = UpcomingManager.doPreSessionCheck(user.cards.upcoming, user.words, user.cardData.settings.dailyNewCardLimit);
+  const { upcoming, dirty, numCardsToAdd } = UpcomingManager.doPreSessionCheck(user.cards.upcoming, user.words, user.cardData.settings.dailyNewCardLimit);
+
+  if (numCardsToAdd) {
+    return { upcoming: (await UserModel.getNewCards(userId, numCardsToAdd)).cards.upcoming, dirty: true };
+  }
+
   if (!dirty) return { dirty };
 
   await MongoClient.getDb().collection(USER_COLL).updateOne({ _id: ObjectId(userId) }, { $set: { 'cards.upcoming': upcoming } });
 
-  return { upcoming, dirty }
+  return { upcoming, dirty };
 }
 
 /**
