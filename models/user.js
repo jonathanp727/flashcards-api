@@ -64,7 +64,27 @@ exports.delete = (id) => (
   MongoClient.getDb().collection(USER_COLL).deleteOne({ _id: ObjectId(id) })
 );
 
-// Adds `numCardsToAdd` cards to the user's upcoming based on their jlpt rank
+/**
+ * Checks if user has space in their upcoming for automatic JLPT based new flashcards.  If the
+ * check has not been performed today and there is space, adds new cards to upcoming and returns
+ * updated user.
+ *
+ * @param id Mongo UserId
+ * @return         Updated user object
+ */
+exports.getWithUpcoming = async (id) => {
+  let user = await exports.get(id);
+  if (!user) throw new Error("User not found");
+  const numCardsToAdd = user.cardData.settings.dailyNewCardLimit - user.cards.upcoming.length;
+  const isAlreadyDoneToday = isSameDay(new Date(user.cardData.lastSession.date), new Date());
+  if (!isAlreadyDoneToday && numCardsToAdd > 0) user = await getNewCards(user, numCardsToAdd);
+
+  // Join dictionary to user words (temporary fix for not having defs on frontend)
+  await exports.joinDict(user);
+
+  return user;
+};
+
 const getNewCards = async (user, numCardsToAdd) => {
   const cursor = await DictModel.getNextWordsByJlpt(user.cardData.jlpt);
   const newWords = [];
