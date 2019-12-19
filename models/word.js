@@ -6,6 +6,7 @@ import Card from '../lib/cardLogic';
 import { createKindaKnewCard } from '../lib/cardLogic';
 import stats from '../lib/statsHandler';
 import UpcomingManager from '../lib/UpcomingManager';
+import { isSameDay } from '../lib/dateLogic';
 
 const USER_COLL = 'users';
 
@@ -42,7 +43,6 @@ exports.addToUpcoming = (userId, newWords, newJlpt) => {
   newWords.forEach(wordId => {
     setWordsQuery[`words.${wordId}`] = schema;
   });
-  setWordsQuery['cardData.lastSession.date'] = new Date().getTime();
 
   return MongoClient.getDb().collection(USER_COLL).findOneAndUpdate({ _id: ObjectId(userId) }, {
     $push: { 'cards.upcoming': { $each: newWords }},
@@ -69,6 +69,7 @@ exports.doCard = async (userId, data) => {
   // Set pull query depending on which array the card previously belonged to
   if (upcoming) {
     query.$pull = { 'cards.upcoming': wordId };
+    query.$inc = { 'cardData.lastSession.upcomingCardsDone': 1 };
   } else {
     query.$pull = { 'cards.inProg': wordId };
   };
@@ -208,15 +209,30 @@ exports.startCardSession = async (userId) => {
   const user = await MongoClient.getDb().collection(USER_COLL).findOne({
     _id: ObjectId(userId),
   });
-  const { upcoming, dirty, numCardsToAdd } = UpcomingManager.doPreSessionCheck(user.cards.upcoming, user.words, user.cardData.settings.dailyNewCardLimit);
-
-  if (numCardsToAdd) {
-    return { upcoming: (await UserModel.getNewCards(userId, numCardsToAdd)).cards.upcoming, dirty: true };
+  const setQuery = {};
+  let alreadyDone = 0;
+  if (isSameDay(user.cardData.lastSession.date)) {
+    alreadyDone = user.cardData.lastSession.upcomingCardsDone;
+  } else {
+    setQuery['cardData.lastSession.date'] = new Date().getTime();
   }
 
-  if (!dirty) return { dirty };
+  const { upcoming, dirty, numCardsToAdd } = UpcomingManager.doPreSessionCheck(user.cards.upcoming, user.words, user.cardData.settings.dailyNewCardLimit - alreadyDone);
 
-  await MongoClient.getDb().collection(USER_COLL).updateOne({ _id: ObjectId(userId) }, { $set: { 'cards.upcoming': upcoming } });
+  if (numCardsToAdd) {
+    const ret = { upcoming: (await UserModel.getNewCards(userId, numCardsToAdd)).cards.upcoming, dirty: true };
+    await MongoClient.getDb().collection(USER_COLL).updateOne({ _id: ObjectId(userId) }, { $set: query });
+    return ret;
+  }
+
+  if (!dirty) {
+    await MongoClient.getDb().collection(USER_COLL).updateOne({ _id: ObjectId(userId) }, { $set: query });
+    return { dirty };
+  }
+
+  setQuery['cards.upcoming'] = upcoming;
+
+  await MongoClient.getDb().collection(USER_COLL).updateOne({ _id: ObjectId(userId) }, { $set: query });
 
   return { upcoming, dirty };
 }
